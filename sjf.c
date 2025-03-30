@@ -1,56 +1,97 @@
 #include <stdio.h>
+#include <stdbool.h>
 
-void findSJF(int n, int at[], int bt[]) {
-    int ct[n], tat[n], wt[n], completed[n], current_time = 0, min_idx;
-    float total_wt = 0, total_tat = 0;
+struct Process {
+    int pid;
+    int arrival_time;
+    int burst_time;
+};
 
-    for (int i = 0; i < n; i++) completed[i] = 0; // Mark all processes as incomplete
-
-    for (int i = 0; i < n; i++) {
-        min_idx = -1;
-
-        // Find the process with the shortest burst time that has arrived
-        for (int j = 0; j < n; j++) {
-            if (!completed[j] && at[j] <= current_time) {
-                if (min_idx == -1 || bt[j] < bt[min_idx]) 
-                    min_idx = j;
+// Function to sort processes by arrival time
+void sortByArrivalTime(struct Process processes[], int n) {
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = 0; j < n - i - 1; j++) {
+            if (processes[j].arrival_time > processes[j + 1].arrival_time) {
+                struct Process temp = processes[j];
+                processes[j] = processes[j + 1];
+                processes[j + 1] = temp;
             }
         }
+    }
+}
 
-        // If no process is available, advance time
-        if (min_idx == -1) {
-            current_time++;
-            i--; // Retry finding the process
-            continue;
+// Function to find the shortest job available at a given time
+int findNextProcess(struct Process processes[], bool completed[], int n, int current_time) {
+    int shortest_index = -1;
+    int shortest_burst = 1e9; // Large number
+
+    for (int i = 0; i < n; i++) {
+        if (!completed[i] && processes[i].arrival_time <= current_time) {
+            if (processes[i].burst_time < shortest_burst) {
+                shortest_burst = processes[i].burst_time;
+                shortest_index = i;
+            }
         }
+    }
+    return shortest_index;
+}
 
-        // Calculate Completion Time (CT)
-        ct[min_idx] = current_time + bt[min_idx];
-        current_time = ct[min_idx];
-        completed[min_idx] = 1;
+// Function to calculate waiting and turnaround times
+void calculateAvgTimes(struct Process processes[], int n) {
+    bool completed[n];
+    int wt[n], tat[n], completion_time[n];
+    int current_time = 0, completed_count = 0;
 
-        // Calculate Turnaround Time (TAT) & Waiting Time (WT)
-        tat[min_idx] = ct[min_idx] - at[min_idx];
-        wt[min_idx] = tat[min_idx] - bt[min_idx];
-
-        total_wt += wt[min_idx];
-        total_tat += tat[min_idx];
+    // Initialize completed array
+    for (int i = 0; i < n; i++) {
+        completed[i] = false;
     }
 
-    // Print Table
-    printf("P#\tAT\tBT\tCT\tTAT\tWT\n");
-    for (int i = 0; i < n; i++) 
-        printf("%d\t%d\t%d\t%d\t%d\t%d\n", i + 1, at[i], bt[i], ct[i], tat[i], wt[i]);
+    while (completed_count < n) {
+        int index = findNextProcess(processes, completed, n, current_time);
 
-    printf("\nAvg WT = %.2f", total_wt / n);
-    printf("\nAvg TAT = %.2f\n", total_tat / n);
+        if (index == -1) {
+            // No process available, move time forward
+            current_time++;
+        } else {
+            // Process the shortest available job
+            completion_time[index] = current_time + processes[index].burst_time;
+            tat[index] = completion_time[index] - processes[index].arrival_time;
+            wt[index] = tat[index] - processes[index].burst_time;
+            completed[index] = true;
+            completed_count++;
+            current_time = completion_time[index]; // Update current time
+        }
+    }
+
+    // Display results
+    float avg_wt = 0, avg_tat = 0;
+    printf("PID\tAT\tBT\tWT\tTAT\n");
+    for (int i = 0; i < n; i++) {
+        avg_wt += wt[i];
+        avg_tat += tat[i];
+        printf("%d\t%d\t%d\t%d\t%d\n", processes[i].pid, processes[i].arrival_time, processes[i].burst_time, wt[i], tat[i]);
+    }
+
+    printf("Average Waiting Time = %.2f\n", avg_wt / n);
+    printf("Average Turnaround Time = %.2f\n", avg_tat / n);
 }
 
 int main() {
-    int at[] = {0, 1, 2, 3, 4}; // Arrival times
-    int bt[] = {8, 1, 3, 2, 6}; // Burst times
-    int n = sizeof(at) / sizeof(at[0]);
+    int n = 5;
+    struct Process processes[] = {
+        {1, 0, 8},
+        {2, 1, 1},
+        {3, 2, 3},
+        {4, 3, 2},
+        {5, 4, 6}
+    };
 
-    findSJF(n, at, bt);
+    // Step 1: Sort by arrival time
+    sortByArrivalTime(processes, n);
+
+    // Step 2: Compute and display average times
+    calculateAvgTimes(processes, n);
+
     return 0;
 }
