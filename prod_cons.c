@@ -1,75 +1,65 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
-#include <unistd.h>
 
-#define BUFFER_SIZE 5  // Buffer size
-#define NUM_ITEMS 10   // Number of items to produce/consume
-
-sem_t empty, full;  // Semaphores for empty and full slots
-pthread_mutex_t mutex; // Mutex for critical section
-
-int buffer[BUFFER_SIZE]; // Shared buffer
-int in = 0, out = 0;  // Buffer index pointers
+int *buffer, in = 0, out = 0, BUF_SIZE, NUM_ITEMS;
+sem_t empty, full;
+pthread_mutex_t mutex;
 
 void *producer(void *arg) {
     for (int i = 0; i < NUM_ITEMS; i++) {
-        int item = i + 1; // Produce an item
+        sem_wait(&empty);
+        pthread_mutex_lock(&mutex);
 
-        sem_wait(&empty);  // Wait for an empty slot
-        pthread_mutex_lock(&mutex);  // Lock the buffer
+        buffer[in] = i;
+        printf("Produced: %d\n", i);
+        in = (in + 1) % BUF_SIZE;
 
-        // Critical Section: Add item to the buffer
-        buffer[in] = item;
-        printf("Producer produced: %d\n", item);
-        in = (in + 1) % BUFFER_SIZE;  // Circular buffer
-
-        pthread_mutex_unlock(&mutex);  // Unlock the buffer
-        sem_post(&full);  // Signal that a new item is available
-
-        sleep(1); // Simulate production time
+        pthread_mutex_unlock(&mutex);
+        sem_post(&full);
+        sleep(1);
     }
     return NULL;
 }
 
 void *consumer(void *arg) {
     for (int i = 0; i < NUM_ITEMS; i++) {
-        sem_wait(&full);  // Wait for an available item
-        pthread_mutex_lock(&mutex);  // Lock the buffer
+        sem_wait(&full);
+        pthread_mutex_lock(&mutex);
 
-        // Critical Section: Remove item from the buffer
         int item = buffer[out];
-        printf("Consumer consumed: %d\n", item);
-        out = (out + 1) % BUFFER_SIZE;  // Circular buffer
+        printf("Consumed: %d\n", item);
+        out = (out + 1) % BUF_SIZE;
 
-        pthread_mutex_unlock(&mutex);  // Unlock the buffer
-        sem_post(&empty);  // Signal that a slot is free
-
-        sleep(2); // Simulate consumption time
+        pthread_mutex_unlock(&mutex);
+        sem_post(&empty);
+        sleep(1);
     }
     return NULL;
 }
 
 int main() {
-    pthread_t prodThread, consThread;
+    printf("Buffer size: ");
+    scanf("%d", &BUF_SIZE);
+    printf("Number of items: ");
+    scanf("%d", &NUM_ITEMS);
 
-    // Initialize semaphores
-    sem_init(&empty, 0, BUFFER_SIZE);
+    buffer = malloc(sizeof(int) * BUF_SIZE);
+    sem_init(&empty, 0, BUF_SIZE);
     sem_init(&full, 0, 0);
     pthread_mutex_init(&mutex, NULL);
 
-    // Create producer and consumer threads
-    pthread_create(&prodThread, NULL, producer, NULL);
-    pthread_create(&consThread, NULL, consumer, NULL);
+    pthread_t p, c;
+    pthread_create(&p, NULL, producer, NULL);
+    pthread_create(&c, NULL, consumer, NULL);
+    pthread_join(p, NULL);
+    pthread_join(c, NULL);
 
-    // Wait for both threads to finish
-    pthread_join(prodThread, NULL);
-    pthread_join(consThread, NULL);
-
-    // Destroy semaphores and mutex
+    free(buffer);
     sem_destroy(&empty);
     sem_destroy(&full);
     pthread_mutex_destroy(&mutex);
-
     return 0;
 }
